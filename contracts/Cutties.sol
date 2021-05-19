@@ -83,14 +83,14 @@ contract Cutties is ERC721, Ownable {
 
         if (cuttiesupply >= MAX_CUTTIES_SUPPLY) {
             return 0;
-        } else if (cuttiesupply >= 9970) {
-            // 9971 ~ 10000
+        } else if (cuttiesupply >= 9990) {
+            // 9991 ~ 10000
             return 1;
-        } else if (cuttiesupply >= 9200) {
-            // 9201 ~ 9970
+        } else if (cuttiesupply >= 9900) {
+            // 9901 ~ 9990
             return 5;
         } else {
-            // 1 ~ 9200
+            // 1 ~ 9900
             return 20;
         }
     }
