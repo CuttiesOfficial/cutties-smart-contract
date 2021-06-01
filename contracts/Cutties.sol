@@ -2,45 +2,26 @@
 
 pragma solidity ^0.8.0;
 
-import "./IERC20.sol";
 import "./ERC721.sol";
 import "./Ownable.sol";
 import "./INonfungiblePositionManager.sol";
 import "./IWETH9.sol";
-
-interface ICUTTToken {
-    function mintLiqudityToken() external;
-
-    function mintCuttiesToken() external;
-
-    function setPoolAddress(address pool) external;
-
-    function balanceOf(address account) external view returns (uint256);
-
-    function approve(address spender, uint256 amount) external returns (bool);
-
-    function transfer(address recipient, uint256 amount)
-        external
-        returns (bool);
-
-    function burn() external returns (bool);
-}
+import "./ICUTTToken.sol";
 
 contract Cutties is ERC721, Ownable {
     using SafeMath for uint256;
 
     string public CUTTIES_PROVENANCE = "";
 
-    // Maximum amount of Cutties in existance. Ever.
     uint256 public constant MAX_CUTTIES_SUPPLY = 10000;
 
-    uint256 public _liquidityTokenAmount = 250000000 * 10**6 * 10**9;
+    uint256 private _liquidityTokenAmount = 200000000 * 10**6 * 10**9;
 
     bool public hasSaleStarted = false;
 
     address payable private constant _team =
-        payable(0x9c2ad34b45CaC92d3E7f53ec6AF247c2F51c2758);
-    address public _governance;
+        payable(0x375063822A5987d83bfc13398C095de89a4730a0);
+    address public _treasuryAddress;
     address public _cuttToken;
     address private _weth9 = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     address private _nonfungiblePositionManager =
@@ -48,7 +29,7 @@ contract Cutties is ERC721, Ownable {
 
     constructor(string memory baseURI) ERC721("Cutties", "CUTTIES") {
         _setBaseURI(baseURI);
-        _governance = msg.sender;
+        _treasuryAddress = msg.sender;
     }
 
     function deposit() external payable {}
@@ -64,7 +45,6 @@ contract Cutties is ERC721, Ownable {
     {
         uint256 tokenCount = balanceOf(_owner);
         if (tokenCount == 0) {
-            // Return an empty array
             return new uint256[](0);
         } else {
             uint256[] memory result = new uint256[](tokenCount);
@@ -75,9 +55,6 @@ contract Cutties is ERC721, Ownable {
         }
     }
 
-    /**
-     * @dev Gets cutties count to mint per once.
-     */
     function getMintableCount() public view returns (uint256) {
         uint256 cuttiesupply = totalSupply();
 
@@ -158,9 +135,6 @@ contract Cutties is ERC721, Ownable {
         }
     }
 
-    /**
-     * @dev Changes the base URI if we want to move things in the future (Callable by owner only)
-     */
     function setBaseURI(string memory baseURI) external onlyOwner {
         _setBaseURI(baseURI);
     }
@@ -169,9 +143,6 @@ contract Cutties is ERC721, Ownable {
         CUTTIES_PROVENANCE = _provenance;
     }
 
-    /**
-     * @dev Mints yourself Cutties.
-     */
     function mintCutties(address to, uint256 count) public payable {
         require(_cuttToken != address(0));
         uint256 cuttiesupply = totalSupply();
@@ -189,9 +160,6 @@ contract Cutties is ERC721, Ownable {
         }
     }
 
-    /**
-     * @dev send eth to team and treasury.
-     */
     function withdraw(uint256 amount) external onlyOwner {
         _team.transfer(amount);
     }
@@ -217,7 +185,7 @@ contract Cutties is ERC721, Ownable {
 
     function mintLiquidityAndCuttiesToken() public onlyOwner {
         require(_cuttToken != address(0));
-        ICUTTToken(_cuttToken).mintLiqudityToken();
+        ICUTTToken(_cuttToken).mintLiquidityToken();
         ICUTTToken(_cuttToken).mintCuttiesToken();
     }
 
@@ -235,7 +203,7 @@ contract Cutties is ERC721, Ownable {
             ICUTTToken(_cuttToken).balanceOf(address(this)) >=
                 _liquidityTokenAmount
                 ? _liquidityTokenAmount
-                : 0;
+                : ICUTTToken(_cuttToken).balanceOf(address(this));
         uint256 ethBalance = address(this).balance;
 
         balance0 = (_weth9 < _cuttToken) ? ethBalance : cuttBalance;
@@ -297,19 +265,20 @@ contract Cutties is ERC721, Ownable {
         INonfungiblePositionManager(_nonfungiblePositionManager).mint(data);
     }
 
-    function setGovernanaceAddress(address governance) public onlyOwner {
-        _governance = governance;
+    function setTreasuryAddress(address treasuryAddress) public {
+        require(msg.sender == _treasuryAddress);
+        _treasuryAddress = treasuryAddress;
     }
 
     function withdrawNFT(uint256 tokenId) external {
-        require(msg.sender == _governance);
+        require(msg.sender == _treasuryAddress);
         INonfungiblePositionManager(_nonfungiblePositionManager).approve(
-            _governance,
+            _treasuryAddress,
             tokenId
         );
         INonfungiblePositionManager(_nonfungiblePositionManager).transferFrom(
             address(this),
-            _governance,
+            _treasuryAddress,
             tokenId
         );
     }
@@ -317,6 +286,7 @@ contract Cutties is ERC721, Ownable {
     function burnExtraToken() public onlyOwner {
         require(_cuttToken != address(0));
         require(!hasSaleStarted);
-        ICUTTToken(_cuttToken).burn();
+        uint256 amount = ICUTTToken(_cuttToken).balanceOf(address(this));
+        ICUTTToken(_cuttToken).burn(amount);
     }
 }

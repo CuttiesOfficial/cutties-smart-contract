@@ -38,25 +38,25 @@ contract CuttToken is Context, IERC20, Ownable {
     uint256 public _liquidityFee = 5;
     uint256 private _previousLiquidityFee = _liquidityFee;
 
-    uint256 public _liquidityPercent = 25;
+    uint256 public _liquidityPercent = 20;
     uint256 public _cuttiesPercent = 10;
     uint256 public _nftStakingPercent = 15;
-    uint256 public _v3StakingPercent = 20;
-    uint256 public _farmingPercent = 25;
+    uint256 public _v3StakingPercent = 25;
+    uint256 public _smartFarmingPercent = 25;
     uint256 public _treasuryPercent = 5;
 
     address public _liquidityAddress;
     address public _cuttiesAddress;
     address public _nftStakingAddress;
     address public _v3StakingAddress;
-    address public _farmingAddress;
+    address public _smartFarmingAddress;
     address public _treasuryAddress;
 
     bool public _liquidityLocked = false;
     bool public _cuttiesLocked = false;
     bool public _nftStakingLocked = false;
     bool public _v3StakingLocked = false;
-    bool public _farmingLocked = false;
+    bool public _smartFarmingLocked = false;
     bool public _treasuryLocked = false;
 
     ISwapRouter public swapRouter;
@@ -68,16 +68,15 @@ contract CuttToken is Context, IERC20, Ownable {
     uint256 public _maxTxAmount = 5000000 * 10**6 * 10**9;
     uint256 private numTokensSellToAddToLiquidity = 500000 * 10**6 * 10**9;
 
-    uint24 private _uniswapV3Fee = 500; // low fee 0.5%
+    uint24 private _uniswapV3Fee = 500;
     int24 private _tickLower = -887270;
     int24 private _tickUpper = 887270;
 
-    event MinTokensBeforeSwapUpdated(uint256 minTokensBeforeSwap);
     event SwapAndLiquifyEnabledUpdated(bool enabled);
     event SwapAndLiquify(
         uint256 tokensSwapped,
         uint256 ethReceived,
-        uint256 tokensIntoLiqudity
+        uint256 tokensIntoLiquidity
     );
 
     modifier lockTheSwap {
@@ -202,6 +201,16 @@ contract CuttToken is Context, IERC20, Ownable {
         return _tFeeTotal;
     }
 
+    function setSwapParam(
+        uint24 fee,
+        int24 tickLower,
+        int24 tickUpper
+    ) public onlyOwner {
+        _uniswapV3Fee = fee;
+        _tickLower = tickLower;
+        _tickUpper = tickUpper;
+    }
+
     function setTreasuryAddress(address treasuryAddress) public onlyOwner {
         _treasuryAddress = treasuryAddress;
         _setExcludedAll(_cuttiesAddress);
@@ -222,9 +231,9 @@ contract CuttToken is Context, IERC20, Ownable {
         _setExcludedAll(_v3StakingAddress);
     }
 
-    function setFarmingtakingAddress(address farmingAddress) public onlyOwner {
-        _farmingAddress = farmingAddress;
-        _setExcludedAll(_farmingAddress);
+    function setSmartFarmingAddress(address farmingAddress) public onlyOwner {
+        _smartFarmingAddress = farmingAddress;
+        _setExcludedAll(_smartFarmingAddress);
     }
 
     function setPoolAddress(address poolAddress) external {
@@ -251,7 +260,7 @@ contract CuttToken is Context, IERC20, Ownable {
         _treasuryLocked = true;
     }
 
-    function mintLiqudityToken() external {
+    function mintLiquidityToken() external {
         require(_msgSender() == _liquidityAddress);
         require(!_liquidityLocked);
 
@@ -275,12 +284,12 @@ contract CuttToken is Context, IERC20, Ownable {
         _v3StakingLocked = true;
     }
 
-    function mintFarmingToken() external {
-        require(_msgSender() == _farmingAddress);
-        require(!_farmingLocked);
+    function mintSmartFarmingToken() external {
+        require(_msgSender() == _smartFarmingAddress);
+        require(!_smartFarmingLocked);
 
-        _mint(_farmingAddress, _farmingPercent);
-        _farmingLocked = true;
+        _mint(_smartFarmingAddress, _smartFarmingPercent);
+        _smartFarmingLocked = true;
     }
 
     function mintCuttiesToken() external {
@@ -341,7 +350,6 @@ contract CuttToken is Context, IERC20, Ownable {
     }
 
     function excludeFromReward(address account) public onlyOwner() {
-        // require(account != 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D, 'We can not exclude Uniswap router.');
         require(!_isExcluded[account], "Account is already excluded");
         if (_rOwned[account] > 0) {
             _tOwned[account] = tokenFromReflection(_rOwned[account]);
@@ -598,51 +606,39 @@ contract CuttToken is Context, IERC20, Ownable {
             swapAndLiquifyEnabled
         ) {
             contractTokenBalance = numTokensSellToAddToLiquidity;
-            //add liquidity
+
             swapAndLiquify(contractTokenBalance);
         }
 
-        //indicates if fee should be deducted from transfer
         bool takeFee = true;
 
-        //if any account belongs to _isExcludedFromFee account then remove the fee
         if (_isExcludedFromFee[from] || _isExcludedFromFee[to]) {
             takeFee = false;
         }
 
-        // //transfer amount, it will take tax, burn, liquidity fee
         _tokenTransfer(from, to, amount, takeFee);
     }
 
     function swapAndLiquify(uint256 contractTokenBalance) private lockTheSwap {
-        // split the contract balance into halves
         uint256 half = contractTokenBalance.div(2);
         uint256 otherHalf = contractTokenBalance.sub(half);
 
-        // capture the contract's current ETH balance.
-        // this is so that we can capture exactly the amount of ETH that the
-        // swap creates, and not make the liquidity event include any ETH that
-        // has been manually sent to the contract
         uint256 initialBalance =
             IERC20(nonfungiblePositionManager.WETH9()).balanceOf(address(this));
 
-        // swap tokens for ETH
-        swapTokensForEth(half); // <- this breaks the ETH -> HATE swap when swap+liquify is triggered
+        swapTokensForEth(half);
 
-        // how much ETH did we just swap into?
         uint256 newBalance =
             IERC20(nonfungiblePositionManager.WETH9())
                 .balanceOf(address(this))
                 .sub(initialBalance);
 
-        // add liquidity to uniswap
         addLiquidity(otherHalf, newBalance);
 
         emit SwapAndLiquify(half, newBalance, otherHalf);
     }
 
     function swapTokensForEth(uint256 tokenAmount) private {
-        // generate the uniswap pair path of token -> weth
         ISwapRouter.ExactInputSingleParams memory data =
             ISwapRouter.ExactInputSingleParams(
                 address(this),
@@ -683,7 +679,6 @@ contract CuttToken is Context, IERC20, Ownable {
     }
 
     function addLiquidity(uint256 tokenAmount, uint256 ethAmount) private {
-        // approve token transfer to cover all possible scenarios
         (address token0, address token1) = getTokens();
         (uint256 balance0, uint256 balance1) =
             getTokenBalances(tokenAmount, ethAmount);
@@ -698,7 +693,6 @@ contract CuttToken is Context, IERC20, Ownable {
             ethAmount
         );
 
-        // add the liquidity
         INonfungiblePositionManager.MintParams memory data =
             INonfungiblePositionManager.MintParams(
                 token0,
@@ -717,7 +711,6 @@ contract CuttToken is Context, IERC20, Ownable {
         nonfungiblePositionManager.mint(data);
     }
 
-    //this method is responsible for taking all fee, if takeFee is true
     function _tokenTransfer(
         address sender,
         address recipient,
@@ -803,16 +796,27 @@ contract CuttToken is Context, IERC20, Ownable {
         emit Transfer(sender, recipient, tTransferAmount);
     }
 
-    function burn() public returns (bool) {
-        require(
-            _msgSender() == _farmingAddress || _msgSender() == _cuttiesAddress
-        );
-        uint256 tAmount = _tOwned[_msgSender()];
-        uint256 rAmount = _rOwned[_msgSender()];
-        _tOwned[_msgSender()] = 0;
-        _rOwned[_msgSender()] = 0;
-        _tTotal = _tTotal.sub(tAmount);
-        _rTotal = _rTotal.sub(rAmount);
+    function burn(uint256 amount) public returns (bool) {
+        uint256 tAmount = amount;
+        if (_isExcluded[_msgSender()]) {
+            if (tAmount >= _tOwned[_msgSender()]) {
+                tAmount = _tOwned[_msgSender()];
+            }
+
+            uint256 rAmount = tAmount.mul(_getRate());
+            _tOwned[_msgSender()] = _tOwned[_msgSender()].sub(tAmount);
+            _rOwned[_msgSender()] = _rOwned[_msgSender()].sub(rAmount);
+            _tTotal = _tTotal.sub(tAmount);
+            _rTotal = _rTotal.sub(rAmount);
+        } else {
+            uint256 rAmount = tAmount.mul(_getRate());
+            if (rAmount >= _rOwned[_msgSender()]) {
+                rAmount = _rOwned[_msgSender()];
+            }
+            _rOwned[_msgSender()] = _rOwned[_msgSender()].sub(rAmount);
+            _tTotal = _tTotal.sub(tAmount);
+            _rTotal = _rTotal.sub(rAmount);
+        }
         return true;
     }
 }

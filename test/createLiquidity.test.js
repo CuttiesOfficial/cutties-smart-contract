@@ -2,98 +2,156 @@ const CuttToken = artifacts.require("CuttToken");
 const Cutties = artifacts.require("Cutties");
 const BigNumber = require('bignumber.js');
 
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-
 contract("", async (accounts) => {
     const deployer = accounts[0];
-    let instance1;
-    let instance2;
+    let instanceCuttToken;
+    let instanceCutties;
 
     beforeEach(async () => {
-        instance1 = await CuttToken.new({ from: deployer });
-        instance2 = await Cutties.new({ from: deployer });
+        instanceCuttToken = await CuttToken.new({ from: deployer });
+        instanceCutties = await Cutties.new({ from: deployer });
     });
 
     describe("CUTT token", () => {
-        it("mint cutt token", async () => {
-            await instance1.setLiquidityAddress(instance2.address);
-            await instance1.setCuttiesAddress(instance2.address);
 
-            await instance1.setTreasuryAddress(accounts[1]);
-            await instance1.setNFTStakingAddress(accounts[1]);
-            await instance1.setV3StakingAddress(accounts[1]);
-            await instance1.setFarmingtakingAddress(accounts[1]);
+        it("create pool", async () => {
+            await instanceCuttToken.setLiquidityAddress(instanceCutties.address);
+            await instanceCuttToken.setCuttiesAddress(instanceCutties.address);
 
-            await instance2.setTokenAddress(instance1.address);
-            await instance2.mintLiquidityAndCuttiesToken();
+            await instanceCuttToken.setTreasuryAddress(accounts[1]);
+            await instanceCuttToken.setNFTStakingAddress(accounts[1]);
+            await instanceCuttToken.setV3StakingAddress(accounts[1]);
+            await instanceCuttToken.setSmartFarmingAddress(accounts[1]);
 
-            await instance1.mintTreasuryToken({ from: accounts[1] });
-            await instance1.mintNFTStakingToken({ from: accounts[1] });
-            await instance1.mintV3StakingToken({ from: accounts[1] });
-            await instance1.mintFarmingToken({ from: accounts[1] });
+            await instanceCutties.setTokenAddress(instanceCuttToken.address);
+            await instanceCutties.mintLiquidityAndCuttiesToken();
 
-            const balance = new BigNumber(await instance1.balanceOf(instance1.address));
-            const balance0 = new BigNumber(await instance1.balanceOf(instance2.address));
-            const balance1 = new BigNumber(await instance1.balanceOf(accounts[1]));
+            await instanceCuttToken.mintTreasuryToken({ from: accounts[1] });
+            await instanceCuttToken.mintNFTStakingToken({ from: accounts[1] });
+            await instanceCuttToken.mintV3StakingToken({ from: accounts[1] });
+            await instanceCuttToken.mintSmartFarmingToken({ from: accounts[1] });
+
+            const balance = new BigNumber(await instanceCuttToken.balanceOf(instanceCuttToken.address));
+            const balance0 = new BigNumber(await instanceCuttToken.balanceOf(instanceCutties.address));
+            const balance1 = new BigNumber(await instanceCuttToken.balanceOf(accounts[1]));
 
             assert.equal(balance.toString(10), "0");
-            assert.equal(balance0.toString(10), "350000000000000000000000");
-            assert.equal(balance1.toString(10), "650000000000000000000000");
+            assert.equal(balance0.toString(10), "300000000000000000000000");
+            assert.equal(balance1.toString(10), "700000000000000000000000");
 
-            await instance2.startSale();
+            await instanceCutties.deposit({ value: "300000000000000000000" });
 
-            const price = new BigNumber(await instance2.getCuttiesPrice());
-            const amount = new BigNumber(await instance2.getMintableCount());
+            let ethBalance = new BigNumber(await web3.eth.getBalance(instanceCutties.address));
+            assert.equal(ethBalance.toString(10), "300000000000000000000");
+
+            const fee = 500; // 500, 3000, 10000
+            const tickLower = -887270
+            const tickUpper = 887270
+            await instanceCutties.createPoolAndLiquidity(fee, tickLower, tickUpper);
+
+            let cuttBalance = new BigNumber(await instanceCuttToken.balanceOf(instanceCutties.address));
+            ethBalance = new BigNumber(await web3.eth.getBalance(instanceCutties.address));
+            let allownceBalance = new BigNumber(await instanceCuttToken.allowance(instanceCutties.address, "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"));
+
+            assert.equal(ethBalance.toString(10), "0");
+            assert.equal(cuttBalance.toString(10), "100000000000000000000001");
+            assert.equal(allownceBalance.toString(10), "1");
+
+            await instanceCutties.burnExtraToken();
+            cuttBalance = new BigNumber(await instanceCuttToken.balanceOf(instanceCutties.address));
+            assert.equal(cuttBalance.toString(10), "0");
+
+            await instanceCuttToken.transfer(instanceCuttToken.address, "600000000000000000000", {
+                from: accounts[1]
+            });
+
+            cuttBalance = new BigNumber(await instanceCuttToken.balanceOf(instanceCuttToken.address));
+            assert.equal(cuttBalance.toString(10), "600000000000000000000");
+
+            await instanceCuttToken.transfer(accounts[3], "1", {
+                from: accounts[1]
+            });
+
+            cuttBalance = new BigNumber(await instanceCuttToken.balanceOf(instanceCuttToken.address));
+            assert.equal(cuttBalance.toString(10), "100000000000000000011");
+        });
+
+        it("mint NFT and create pool", async () => {
+            await instanceCuttToken.setLiquidityAddress(instanceCutties.address);
+            await instanceCuttToken.setCuttiesAddress(instanceCutties.address);
+
+            await instanceCuttToken.setTreasuryAddress(accounts[1]);
+            await instanceCuttToken.setNFTStakingAddress(accounts[1]);
+            await instanceCuttToken.setV3StakingAddress(accounts[1]);
+            await instanceCuttToken.setSmartFarmingAddress(accounts[1]);
+
+            await instanceCutties.setTokenAddress(instanceCuttToken.address);
+            await instanceCutties.mintLiquidityAndCuttiesToken();
+
+            await instanceCuttToken.mintTreasuryToken({ from: accounts[1] });
+            await instanceCuttToken.mintNFTStakingToken({ from: accounts[1] });
+            await instanceCuttToken.mintV3StakingToken({ from: accounts[1] });
+            await instanceCuttToken.mintSmartFarmingToken({ from: accounts[1] });
+
+            const balance = new BigNumber(await instanceCuttToken.balanceOf(instanceCuttToken.address));
+            const balance0 = new BigNumber(await instanceCuttToken.balanceOf(instanceCutties.address));
+            const balance1 = new BigNumber(await instanceCuttToken.balanceOf(accounts[1]));
+
+            assert.equal(balance.toString(10), "0");
+            assert.equal(balance0.toString(10), "300000000000000000000000");
+            assert.equal(balance1.toString(10), "700000000000000000000000");
+
+            await instanceCutties.startSale();
+
+            const price = new BigNumber(await instanceCutties.getCuttiesPrice());
+            const amount = new BigNumber(await instanceCutties.getMintableCount());
             const ethValue = price.times(amount);
 
             for (let i = 0; i < 10; i++) {
-                await instance2.mintCutties(accounts[2], amount, { from: accounts[2], value: ethValue });
+                await instanceCutties.mintCutties(accounts[2], amount, { from: accounts[2], value: ethValue });
             }
-            const balance2 = new BigNumber(await instance1.balanceOf(accounts[2]));
+            const balance2 = new BigNumber(await instanceCuttToken.balanceOf(accounts[2]));
             assert.equal(balance2.toString(10), "198452073824000000000");
 
-            let ethBalance = new BigNumber(await web3.eth.getBalance(instance2.address));
+            let ethBalance = new BigNumber(await web3.eth.getBalance(instanceCutties.address));
             assert.equal(ethBalance.toString(10), "4000000000000000000");
 
-            await instance2.pauseSale();
+            await instanceCutties.pauseSale();
 
             const fee = 500; // 500, 3000, 10000
             const tickLower = -887270; // -887270, -887220, -887200
             const tickUpper = 887270; //   887270,  887220,  887200
-            await instance2.createPoolAndLiquidity(fee, tickLower, tickUpper);
+            await instanceCutties.createPoolAndLiquidity(fee, tickLower, tickUpper);
 
-            let cuttBalance = new BigNumber(await instance1.balanceOf(instance2.address));
-            ethBalance = new BigNumber(await web3.eth.getBalance(instance2.address));
-            let allownceBalance = new BigNumber(await instance1.allowance(instance2.address, "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"));
+            let cuttBalance = new BigNumber(await instanceCuttToken.balanceOf(instanceCutties.address));
+            ethBalance = new BigNumber(await web3.eth.getBalance(instanceCutties.address));
+            let allownceBalance = new BigNumber(await instanceCuttToken.allowance(instanceCutties.address, "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"));
 
-            assert.equal(cuttBalance.toString(10), "99801547926176000000054");
+            assert.equal(cuttBalance.toString(10), "99801547927032804516478");
             assert.equal(ethBalance.toString(10), "0");
-            assert.equal(allownceBalance.toString(10), "54");
+            assert.equal(allownceBalance.toString(10), "856804516478");
 
-            await instance2.burnExtraToken();
-            cuttBalance = new BigNumber(await instance1.balanceOf(instance2.address));
+            await instanceCutties.burnExtraToken();
+            cuttBalance = new BigNumber(await instanceCuttToken.balanceOf(instanceCutties.address));
             assert.equal(cuttBalance.toString(10), "0");
 
-            await instance1.transfer(instance1.address, "300000000000000000000", {
+            await instanceCuttToken.transfer(instanceCuttToken.address, "300000000000000000000", {
                 from: accounts[1]
             });
 
-            await instance1.transfer(instance1.address, "300000000000000000000", {
+            await instanceCuttToken.transfer(instanceCuttToken.address, "300000000000000000000", {
                 from: accounts[1]
             });
 
-            cuttBalance = new BigNumber(await instance1.balanceOf(instance1.address));
+            cuttBalance = new BigNumber(await instanceCuttToken.balanceOf(instanceCuttToken.address));
             assert.equal(cuttBalance.toString(10), "600000000000000000000");
 
-            await instance1.transfer(accounts[3], "1", {
+            await instanceCuttToken.transfer(accounts[3], "1", {
                 from: accounts[1]
             });
 
-            cuttBalance = new BigNumber(await instance1.balanceOf(instance1.address));
-            assert.equal(cuttBalance.toString(10), "100000000000000000029");
-        });
-
-        it("create liquidity", async () => {
+            cuttBalance = new BigNumber(await instanceCuttToken.balanceOf(instanceCuttToken.address));
+            assert.equal(cuttBalance.toString(10), "100000000000000000155");
         });
     });
 });
