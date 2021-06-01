@@ -143,7 +143,7 @@ contract Cutties is ERC721, Ownable {
         CUTTIES_PROVENANCE = _provenance;
     }
 
-    function mintCutties(address to, uint256 count) public payable {
+    function mintCutties(address to, uint256 count) external payable {
         require(_cuttToken != address(0));
         uint256 cuttiesupply = totalSupply();
         require(hasSaleStarted);
@@ -157,6 +157,13 @@ contract Cutties is ERC721, Ownable {
         for (uint8 i; i < count; i++) {
             uint256 mintIndex = totalSupply();
             _safeMint(to, mintIndex);
+        }
+    }
+
+    function reserveCutties() external onlyOwner {
+        uint256 supply = totalSupply();
+        for (uint256 i = 0; i < 30; i++) {
+            _safeMint(msg.sender, supply + i);
         }
     }
 
